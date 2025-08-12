@@ -1,13 +1,14 @@
 from datetime  import datetime, timedelta
 import numpy as np
 import pandas as pd
-import json
 import gc
 import pycurl
 import io
 import xarray as xr
 import time, random, glob, shutil, os, re
 import urllib
+from ._dict_gfs import dict_gfs as __dict_gfs__ 
+from ._version import _version as __version__
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -16,91 +17,29 @@ class model(object):
     def __init__(self):
 
         """ 
-            Função para inicializar o configurador do modelo GFS, retorna objeto com a função load habilitada para uso.
 
-            Parametros
-            ------------------------------------------------------------------------------------------------------------------------------------------------------       
+        Function to initialize the GFS model configurator, returns an object with the load function enabled for use.
 
-            * Model     : Para configurar o GFS em novas resoluções altere o campo parameter
-            * Variables : Para habilitar novas váriaveis adicionar o nome da variavel e o nome referente dentro do .idx ou .inv
-            * Levels    : Define as variaveis com 1 unico nivel ou multiplos
-            * Area      : Durante inicialização é adicionado o campo Reduce, quando True os parametros definidos aqui são aplicados para dar zoom em area desejada
-            * Transform : Realiza transformação nas unidades das variaveis para uma unidade comum entre os modelos.
-            * File      : Nome do arquivo disponivel no ftp
-            * Server    : Servidor FTP consumido pela aplicação
-            ------------------------------------------------------------------------------------------------------------------------------------------------------       
+        Parameters
+        --------------------------------------------------------------------------------------------------------------------------------------
 
-            Retorna objeto model
+        * Model: To configure the GFS in new resolutions, change the parameter field
+        * Variables: To enable new variables, add the variable name and the corresponding name within the .idx or .inv
+        * Levels: Defines the variables with a single level or multiple levels
+        * Area: During initialization, the Reduce field is added, when True, the parameters defined here are applied to zoom in on the desired area
+        * Transform: Performs transformation in the units of the variables to a common unit between the models.
+        * File: Name of the file available on the ftp
+        * Server: FTP server consumed by the application
+        --------------------------------------------------------------------------------------------------------------------------------------
+
+        Returns a model object
+
         """
 
-        self.dict = {   
-            
-            "model"    : {
-                    "name" : "GFS",
-                    "parameter" : "0p25",
-                    "long_name" : " National Centers for Environmental Prediction - NCEP "
-            },
-            "variables" :  {
-                    "t" : "TMP",
-                    "u" : "UGRD",
-                    "v" : "VGRD",
-                    "rh" : "RH",
-                    "g" : "HGT",
-                    "omega" : "VVEL",
-                    "u10m" : "UGRD",
-                    "v10m" : "VGRD",
-                    "t2m" : "TMP",
-                    "slp" : "PRMSL",
-                    "psfc" : "PRES",
-                    "terrain" : "HGT",
-                    "sbcape" : "CAPE",
-                    "sbcin" : "CIN",
-                    "pw" : "PWAT",
-                    "precip" : "APCP"
-                        },
-            "levels" :   {  
-                        "t" : "LVL",
-                        "u" : "LVL",
-                        "v" : "LVL",
-                        "rh" : "LVL",
-                        "g" : "LVL",
-                        "omega" : "LVL",
-                        "u10m" : "SFC",
-                        "v10m" : "SFC",
-                        "t2m" : "SFC",
-                        "slp" : "SFC",
-                        "psfc" : "SFC",
-                        "terrain" : "SFC",
-                        "sbcape" : "SFC",
-                        "sbcin" : "SFC",
-                        "pw" : "SFC",
-                        "precip" : "SFC"
-            },
-            "area"    : {
-                        "minlat" :    -57,
-                        "maxlat" :     17,
-                        "minlon" :    277,
-                        "maxlon" :    332
-            },
-            "transform" : {
-                        "t"      : "-273.15",
-                        "omega"  :     "*10",
-                        "t2m"    :  "-273.15",
-                        "slp"    :     "/100",
-                        "psfc"   :     "/100"
-            },
-            "file"    : {
-                        "name"   :     "gfs.t{}z.pgrb2.0p25.{}",
-                        "format" :     "grib2"
-            },
-            "server":   {
-                            "ftp"    :     "https://ftp.ncep.noaa.gov"
-            }
-    
-        } 
+        self.dict = __dict_gfs__
 
         self.levels= [ "1000","975","950","925","900","850","800","750","700","650","600","550","500","450","400","350","300","250","200","150","100","70","50","40","30","20","15","10","7","5","3","2","1"]
-       
+        self.variables = list(self.dict['variables'])    
         self.area = {
                        "northlat" :    90,
                        "southlat" :    -90,
@@ -114,7 +53,6 @@ class model(object):
         self.dict.update({'path_to_save': os.getcwd()})
 
         self.local_path = f"INPE/{self.dict['model']['name']}/{self.dict['model']['parameter']}/brutos"
-        self.ftppath = f"/data/nccf/com/gfs/prod"
 
         print(f"\n#### {self.dict['model']['long_name']} ({self.dict['model']['parameter']}) #####\n")
         start = time.strftime("%Y%m%d", time.gmtime(time.time()))
@@ -124,123 +62,127 @@ class model(object):
         self.frequency = [0,168]        
         
         print(f"Forecast data available for reading between {end} and {start}.\n")
-        print(f"Surface variables: t2m, u10m, v10m, slp, psfc, precip")
-        print(f"                   terrain, sbcape, sbcin, pw.")
-        print(f"Level variables:   t, u, v, rh, g, omega.\n")
-        print(f"levels (hPa): 1000 975 950 925 900 850 800 750 700 650 600 550 500 450")
-        print(f"              400 350 300 250 200 150 100 70 50 40 30 20 15 10 7 5 3 2 1.\n")
+        var_level = [sigla  for sigla, level in self.dict['levels'].items() if level =='LVL']
+        var_surface = [sigla  for sigla, level in self.dict['levels'].items() if level =='SFC']
+        print(f"Surface variables: {var_surface}.\n")
+        print(f"Level variables:   {var_level}.\n")
+        print(f"levels (hPa): {self.levels}.\n")
         print(f"Frequency: hourly frequency [0,1,2,...,22,23].\n")
 
         self.session = random.random()
 
-        model.__clean__()
+        __clean__()
 
-    def load(self, date=None, steps=[0], var=['t2m'], level=[1000, 'surface']):
+    def load(self, date=None, steps=1, var=['t2m'], level=[1000, 'surface']):
 
 
         """
         
-        A função load prepara a lista de variaveis, niveis e datas que serão carregadas para memoria.
+        The load function prepares the list of variables, levels and dates that will be loaded into memory.
 
-        Durante execução um diretorio temporario é criado para manipular os arquivos e é apagado assim que finalizada requisição.
+        During execution, a temporary directory is created to handle the files and is deleted as soon as the request is completed.
 
-        self.date é definido pela frequência que o modelo disponibiliza suas previsões, para o GFS de 1 em 1 hora.
+        self.date is defined by the frequency at which the model makes its forecasts available, for the GFS every 1 hour.
 
-        Parametros
-        ------------------------------------------------------------------------------------------------------------       
-        date  : Data da condição inicial date=YYYYMMDDHH, use HH para IC 00 e 12.
-        steps : Integer/Array de inteiros com os passos desejados. onde 0 é a inicialização do modelo [0,1, ... ,168], valor maximo 168.
-        var   : Array de string com nome das variaveis disponiveis para leitura ['t2m', 'precip']
-        level : Array de inteiros com os niveis disponiveis para cada modelo [1000, 850]
-        ------------------------------------------------------------------------------------------------------------       
+        Parameters
+        ------------------------------------------------------------------------------------------------------------
+        date : Date of the initial condition date=YYYYMMDDHH, use HH for IC 00 and 12.
+        steps : Integer/Array of integers with the desired steps. where 0 is the initialization of the model [0,1, ... ,168], maximum value 168.
+        var: Array of strings with the names of the variables available for reading ['t2m', 'precip']
+        level: Array of integers with the levels available for each model [1000, 850]
+        ------------------------------------------------------------------------------------------------------------
 
         load(date='2022082300', steps=[0,1,5,9], var=['t', 'precip'], level=[1000, 850])
         load(date='2022082300', steps= 4, var=['t', 'precip'], level=[1000, 850])
-        
-        ------------------------------------------------------------------------------------------------------------       
-        
-        Retorna um Xarray contendo todas variaveis solicitadas com as transformações contidas em self.dict
 
-        ------------------------------------------------------------------------------------------------------------       
+        --------------------------------------------------------------------------------------------
+
+        Returns an Xarray containing all the requested variables with the transformations contained in self.dict 
+
+        ------------------------------------------------------------------------------------------------------------     
 
         """
         if (isinstance(steps,int)) : steps = [h for h in range(0, steps+1, 1)]
+        if type(var) == str: var = [var]
+        if (len(steps)<2) :
+            if len(var) == 1 and self.dict['types'][var[0]] == "FCT" and steps[0] == 0: 
+                steps = [h for h in range(0, 2, 1)]
+
         if type(date) == int: date = str(date)
         if date == None: date = datetime.today().strftime("%Y%m%d")
         if type(level) == int: level = [level]
-        if type(var) == str: var = [var]
 
         self.start_date = date
         self.start_date = self.start_date.replace('/', '')
         self.start_date = self.start_date.replace('-', '')
         if len(self.start_date) == 8: self.start_date = f"{self.start_date}00"
 
-        self.query_level = level
+        self.query_level = level 
+            
         self.date = [(datetime.strptime(f'{self.start_date}',  '%Y%m%d%H') + timedelta(hours=int(h))).strftime("%Y%m%d%H") for h in steps]
         self.year       = self.start_date[0:4]
         self.mon        = self.start_date[4:6]
         self.day        = self.start_date[6:8]
         self.hour       = self.start_date[8:10]
 
-        self.variables = var
+        self.query_variables = var
 
         self.__getrange__()
         if os.path.exists(f".temporary_files/{self.session}"): shutil.rmtree(f".temporary_files/{self.session}")
         
         return self.file
 
+
+
     def __repr__(self):
 
         """
-            Função para exibir definições contidas no objeto, acessivel através do self.dict
+
+        Function to display definitions contained in the object, accessible through self.dict
 
         """
 
         print(f"Reduce area: {self.dict['area']['reduce']}")
         print(f"Save netcdf: {self.dict['save_netcdf']}")
         print(f"Path to save: {self.dict['path_to_save']}")
-        print(f"To see more info use wrf.help()")
+        print(f"\n#### {self.dict['model']['long_name']} ({self.dict['model']['parameter']}) #####\n")
+        start = time.strftime("%Y%m%d", time.gmtime(time.time()))
+        end = (datetime.strptime(f'{start}',  '%Y%m%d') - timedelta(days=9)).strftime("%Y%m%d")
+        print(f"Forecast data available for reading between {end} and {start}.\n")
+        var_level = [sigla  for sigla, level in self.dict['levels'].items() if level =='LVL']
+        var_surface = [sigla  for sigla, level in self.dict['levels'].items() if level =='SFC']
+        print(f"Surface variables: {var_surface}.\n")
+        print(f"Level variables:   {var_level}.\n")
+        print(f"levels (hPa): {self.levels}.\n")
+        print(f"Frequency: hourly frequency [0,1,2,...,22,23].\n")        
+        print(f"To see more info use gfs.help()")
 
         return str('')    
 
-    def __clean__():
 
-        """
-            Quando o processo de requisição é interrompido a ferramenta não removerá os arquivos temporarios,
-            esta função remove todo diretorio temporario com mais de 2 dias em disco.
-
-        """
-
-        if os.path.exists(f".temporary_files"): 
-
-            today = datetime.today()
-            
-            files = glob.glob(".temporary_files/0.*")
-            for f in files:
-                duration = today - datetime.fromtimestamp(os.path.getmtime(f))
-                if duration.days >= 2:
-                    shutil.rmtree(f)
-    
     def help(self):
         
         """
-            Função para exibir as informações dos modelos e suas parametrizações.
-        
+
+        Function to display model information and their parameterizations.    
+
         """
-        print('help')
+        help(model)
 
     def __getrange__(self):
 
         """ 
-            Função para criar dataframe com informações que serão consumidas por self.__curl__.
-            Entre as informações coletadas estão as posições inferior e superior de cada variavel dentro no arquivo grib.
 
-            Exemplo self.setup:
-            --------------------------------------------------------------------------------------------------------------       
-                forecast_date      upper   id      lower  start_date  var    level   step_model varname fsim
-            0   2022082300  405687910  563  405131549  2022082300  TMP  surface          anl     t2m  000
-            1   2022082301  405723677  563  405166292  2022082300  TMP  surface  1 hour fcst     t2m  001
-            --------------------------------------------------------------------------------------------------------------       
+        Function to create a dataframe with information that will be consumed by self.__curl__.
+
+        The information collected includes the lower and upper positions of each variable in the grib file.
+
+        Example of self.setup:
+        --------------------------------------------------------------------------------------------------------------
+        forecast_date upper id lower start_date var level step_model varname fsim
+        0 2022082300 405687910 563 405131549 2022082300 TMP surface anl t2m 000
+        1 2022082301 405723677 563 405166292 2022082300 TMP surface 1 hour fcst t2m 001
+        --------------------------------------------------------------------------------------------------------------
 
         """
 
@@ -254,20 +196,18 @@ class model(object):
                 fsim = fsim.zfill(3)
 
                 invfile = self.dict['file']['name'].format(self.hour, f'f{fsim}')
-                invfile = f'{self.ftppath}/gfs.{self.year}{self.mon}{self.day}/{self.hour}/atmos/{invfile}.idx'
-
-                #print(f"{self.dict['server']['ftp']}/{invfile}")
+                invfile = f'gfs.{self.year}{self.mon}{self.day}/{self.hour}/atmos/{invfile}.idx'
                 
                 df = pd.read_csv(f"{self.dict['server']['ftp']}/{invfile}", skiprows=0, names=['header'])
-                
+
                 df['header'] = df['header'].map(lambda x: x[:-1])
                 df[['id', 'allocate', 'date', 'var', 'level', 'timeFct']] = df['header'].str.split(':', expand=True)
                 df.drop('header', axis=1, inplace=True)
                 df['date'] = df['date'].map(lambda x: str(x).split('=')[1])
                 
-                for var in self.variables:
+                for var in self.query_variables:
+             
                     if var in self.dict['variables']:
-
                         value = self.dict['variables'][var]
                         varframe = df[ df['var'] == value ]
 
@@ -298,6 +238,14 @@ class model(object):
 
                                     if var == 'pw': lvl = 'considered as a single layer'
 
+                                    if var == 'tsoil' or var == 'soilw' or var == 'soill': lvl = '0-0.1 m below ground'
+
+                                    if var == 'iceg': lvl = 'm above mean sea level'
+
+                                    if var == 'refd': lvl = '1 hybrid level'
+
+                                    if var == 'icaht' or var == 'vwsh': lvl = 'tropopause'
+
                                     if var == 'precip' and id == 0: pass
 
                                 if len(varframe) == 1:
@@ -307,20 +255,22 @@ class model(object):
                                 else:
 
                                     if self.dict['levels'][var] == 'SFC':
+                                        if var == 'prate' or var == 'csnow' or var == 'cicep' or var == 'cfrzr' or var == 'crain' or var == 'cprat':
+                                            frame = varframe[ varframe['timeFct'] == f'0-{id} hour ave fcst' ][-1:]
 
-                                        if var == 'precip':
+                                        elif var == 'precip' or var == 'acpcp':
 
                                             frame = varframe[ varframe['timeFct'] == f'0-{id} hour acc fcst' ][-1:]
                                         else:
                                             frame = varframe[ varframe['level'] == lvl ]
                                     else:
-                                        frame = varframe[ varframe['level'] == f'{lvl} mb' ]
+                                        frame = varframe[ varframe['level'] == f'{lvl} mb' ] 
 
                                 if len(frame) > 0:
-
+  
                                     upper = df.iloc[frame.index+1]['allocate']
                                     pp = np.append(dt, upper)
-                                    
+
                                     try:
                                         pp = np.append(pp, frame.values[0])
                                     except IndexError:
@@ -336,6 +286,7 @@ class model(object):
                                                         'level', 'step_model', 'varname', 'fsim'])
 
             self.setup.drop_duplicates(inplace=True)
+
             self.__curl__()
 
         except urllib.error.HTTPError as err:
@@ -345,17 +296,18 @@ class model(object):
         except Exception as err:
             print(err)
             print(f"Unexpected {err=}, {type(err)=}")
-
+            self.file = None
+            return
 
     def __curl__(self):
 
 
         """
         
-            A função __curl__ realiza para cada registro em self.setup o download das variaveis descritas, aplica as transformações
-            definidas em self.dict['transform'] e devolve em self.file um Xarray em memoria com todos tempos das variaveis previstas solicitas.
+        The __curl__ function downloads the variables described for each record in self.setup, applies 
+        the transformations defined in self.dict['transform'] and returns in self.file an Xarray in memory with all the times of the requested variables.
 
-            Quando self.dict['save_netcdf'] == True um arquivo netcdf4 será salvo com copia da requisição automaticamente.
+        When self.dict['save_netcdf'] == True a netcdf4 file will be saved with a copy of the request automatically.
         
         """
 
@@ -370,7 +322,7 @@ class model(object):
         for _,row in self.setup.iterrows():
             
             grbfile = self.dict['file']['name'].format(self.hour, f"f{row['fsim']}")
-            grbfile = f'{self.ftppath}/gfs.{self.year}{self.mon}{self.day}/{self.hour}/atmos/{grbfile}'
+            grbfile = f'/gfs.{self.year}{self.mon}{self.day}/{self.hour}/atmos/{grbfile}'
             c = pycurl.Curl()
             c.setopt(pycurl.URL,f"{self.dict['server']['ftp']}/{grbfile}")
 
@@ -408,28 +360,34 @@ class model(object):
                 f = f.rename({'isobaricInhPa' : 'level'})
                 f = f.expand_dims(['level'])
 
+            if 'heightAboveGroundLayer' in f: f = f.drop_vars('heightAboveGroundLayer')
             if 'heightAboveGround' in f: f = f.drop_vars('heightAboveGround')
-
-            if 'atmosphereSingleLayer' in f: f = f.drop_vars('atmosphereSingleLayer')
-
-            if 'meanSea' in  f:
-                f = f.drop_vars('meanSea')
+            if 'meanSea' in  f: f = f.drop_vars('meanSea')
+            if 'depthBelowLandLayer' in  f: f = f.drop_vars('depthBelowLandLayer')
+            if 'atmosphere' in  f: f = f.drop_vars('atmosphere')
+            if 'highCloudLayer' in  f: f = f.drop_vars('highCloudLayer')
+            if 'heightAboveSea' in  f: f = f.drop_vars('heightAboveSea')
+            if 'lowCloudLayer' in  f: f = f.drop_vars('lowCloudLayer')
+            if 'pressureFromGroundLayer' in  f: f = f.drop_vars('pressureFromGroundLayer')
+            if 'hybrid' in  f: f = f.drop_vars('hybrid')            
+            if 'tropopause' in  f: f = f.drop_vars('tropopause')
+            if 'middleCloudLayer' in  f: f = f.drop_vars('middleCloudLayer')
+            if 'planetaryBoundaryLayer' in  f: f = f.drop_vars('planetaryBoundaryLayer')
+            if 'atmosphereSingleLayer' in  f: f = f.drop_vars('atmosphereSingleLayer')     
 
             f = f.expand_dims(['time'])
             outnc = outfile.split('/')[-1]
-
-            # Transforma unidade
+            
             if var in self.dict['transform']:
                 tr = float(self.dict['transform'][var][1:])
                 op = self.dict['transform'][var][0]
                 f = eval(f'f {op} tr')
+                f[var].attrs = {
+                            "long_name" : self.dict['desc'][var]['name'],
+                            "units"  :       self.dict['desc'][var]['unit'],
+                            "standard_name": self.dict['desc'][var]['name']
+                    }
 
-            if 't2m' in f:
-                f['t2m'].attrs['units'] = 'C'
-
-            if 't' in f:
-                f['t'].attrs['units'] = 'C'
-            # self.xarray['lev'].attrs['units'] = 'hPa'
             
             if self.dict['area']['reduce'] ==  True:
 
@@ -492,3 +450,74 @@ class model(object):
 
         gc.collect()
         self.file = field
+
+
+    def get_var_description(self, var=None):
+        """
+        Retrieve the description of meteorological variables as a pandas DataFrame.
+    
+        If a specific variable name is provided, returns a DataFrame with a single row
+        containing its name and unit. If no variable is specified, returns a DataFrame
+        with all available variables and their respective metadata.
+
+        Parameters
+        ----------
+        var : str, optional
+            The key of the variable to retrieve its description. If None, all variable
+            descriptions are returned.
+
+        Returns
+        -------
+        pandas.DataFrame
+            A DataFrame with columns ['Variable', 'Name', 'Unit'].
+            - If `var` is provided: the DataFrame contains one row.
+            - If `var` is None: the DataFrame contains all available variables.
+
+        Examples
+        --------
+        >>> gfs.get_var_description('t')
+        Variable        Name       Unit
+        0        t  Temperature         C
+
+        >>> gfs.get_var_description()
+        Variable                   Name  Unit
+        0        t            Temperature    C
+        1        u  u-component of wind  m/s
+        2        v  v-component of wind  m/s
+        """
+        if var:
+            data = [
+                {'Variable': var, 
+                'Name': self.dict['desc'][var]['name'], 
+                'Unit': self.dict['desc'][var]['unit']
+                }
+
+            ]
+        else:
+            data = [
+                {'Variable': k, 'Name': v['name'], 'Unit': v['unit']}
+                for k, v in self.dict['desc'].items()
+            ]
+        return pd.DataFrame(data)
+
+        
+
+def __clean__():
+
+    """
+
+    When the request process is interrupted the tool will not remove temporary files,
+    this function removes all temporary directories older than 2 days on disk.
+
+
+    """
+       
+    if os.path.exists(f".temporary_files"):
+
+        today = datetime.today()
+           
+        files = glob.glob(".temporary_files/0.*")
+        for f in files:
+            duration = today - datetime.fromtimestamp(os.path.getmtime(f))
+            if duration.days >= 2:
+                shutil.rmtree(f) 
